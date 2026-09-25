@@ -43,4 +43,16 @@ class IrregularLoanCalculatorTest {
                 .isInstanceOfSatisfying(ApiException.class,
                         exception -> assertThat(exception.code()).isEqualTo("PRINCIPAL_OUT_OF_RANGE"));
     }
+
+    @Test
+    void scalesRemainingPresentValueAgainstOriginalFutureValue() {
+        assertThat(IrregularLoanCalculator.remainingPresentValue(
+                new BigDecimal("100.00"), new BigDecimal("110.00"), new BigDecimal("100.00")))
+                .isEqualByComparingTo("90.91");
+        assertThat(IrregularLoanCalculator.remainingInterest(new BigDecimal("100.00"), new BigDecimal("90.91")))
+                .isEqualByComparingTo("9.09");
+        assertThat(IrregularLoanCalculator.remainingPresentValue(
+                new BigDecimal("100.00"), new BigDecimal("110.00"), BigDecimal.ZERO))
+                .isEqualByComparingTo("0.00");
+    }
 }

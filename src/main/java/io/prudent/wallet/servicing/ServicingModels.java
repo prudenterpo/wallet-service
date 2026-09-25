@@ -13,6 +13,11 @@ import java.util.UUID;
 public final class ServicingModels {
     private ServicingModels() {}
 
+    /**
+     * @param amount cash received
+     * @param discount reduces the future-value amount applied; it is not a principal write-off
+     * @param addition increases the future-value amount applied beyond cash received
+     */
     public record AmortizationRequest(@NotNull LocalDate effectiveDate,
                                       @NotNull @DecimalMin("0.01") @Digits(integer = 17, fraction = 2) BigDecimal amount,
                                       @NotNull @DecimalMin("0.00") @Digits(integer = 17, fraction = 2) BigDecimal discount,
@@ -22,12 +27,16 @@ public final class ServicingModels {
     public record Allocation(UUID installmentId, int installmentNumber, BigDecimal amount) {}
     public record AmortizationResponse(UUID settlementId, UUID contractId, LocalDate effectiveDate,
                                        BigDecimal submittedAmount, BigDecimal allocatedAmount,
-                                       BigDecimal remainingBalance, List<Allocation> allocations) {}
+                                       BigDecimal remainingBalance, BigDecimal remainingPresentValue,
+                                       List<Allocation> allocations) {}
     public record InstallmentPosition(UUID installmentId, int number, LocalDate dueDate,
-                                      BigDecimal scheduled, BigDecimal paid, BigDecimal outstanding) {}
+                                      BigDecimal presentValue, BigDecimal scheduled, BigDecimal paid,
+                                      BigDecimal outstanding, BigDecimal remainingPresentValue) {}
     public record ContractPosition(UUID contractId, String externalReference, LocalDate asOf, String status,
-                                   BigDecimal originalPrincipal, BigDecimal scheduled,
-                                   BigDecimal paid, BigDecimal outstanding, List<InstallmentPosition> installments) {}
+                                   BigDecimal originalPrincipal, BigDecimal originalInterest, BigDecimal scheduled,
+                                   BigDecimal paid, BigDecimal outstanding, BigDecimal remainingPresentValue,
+                                   BigDecimal remainingInterest, List<InstallmentPosition> installments) {}
     public record PortfolioPosition(LocalDate asOf, int contractCount, BigDecimal originalPrincipal,
-                                    BigDecimal scheduled, BigDecimal paid, BigDecimal outstanding) {}
+                                    BigDecimal scheduled, BigDecimal paid, BigDecimal outstanding,
+                                    BigDecimal remainingPresentValue, BigDecimal remainingInterest) {}
 }

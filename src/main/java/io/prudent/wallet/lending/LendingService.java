@@ -65,7 +65,8 @@ public class LendingService {
                 .param("due", item.dueDate()).param("present", item.presentValue()).param("future", item.futureValue())
                 .param("interest", item.interest()).update());
         var response = new ContractResponse(contractId, request.externalReference(), "ACTIVE",
-                simulation.totalPresentValue(), simulation.ruleVersion(), simulation.schedule());
+                simulation.totalPresentValue(), simulation.fee(), simulation.netAmount(),
+                simulation.ruleVersion(), simulation.schedule());
         idempotency.remember(organizationId, "CONTRACT", idempotencyKey, fingerprint, response);
         return response;
     }
