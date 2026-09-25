@@ -20,9 +20,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 final class LocalOrganizationBootstrap implements ApplicationRunner {
     @ConfigurationProperties("wallet.bootstrap")
-    record Properties(boolean enabled, List<Organization> organizations) {
-        record Organization(String name, @Nullable String apiKey) {
-        }
+    record Properties(
+            boolean enabled,
+            List<Organization> organizations) {
+        record Organization(
+                String name,
+                @Nullable String apiKey) {}
     }
 
     private final JdbcClient jdbc;

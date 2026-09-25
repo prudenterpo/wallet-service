@@ -23,9 +23,16 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class OriginationService {
-    private record Proposal(UUID id, UUID borrowerId, String externalReference, String status,
-                            String ruleVersion, LocalDate disbursementDate, BigDecimal principal,
-                            BigDecimal annualRate, BigDecimal fee) {}
+    private record Proposal(
+            UUID id,
+            UUID borrowerId,
+            String externalReference,
+            String status,
+            String ruleVersion,
+            LocalDate disbursementDate,
+            BigDecimal principal,
+            BigDecimal annualRate,
+            BigDecimal fee) {}
 
     private final JdbcClient jdbc;
     private final IrregularLoanCalculator calculator;
@@ -129,7 +136,12 @@ public class OriginationService {
                 .param("interest", item.interest()).update();
     }
 
-    private record ActivationCommand(UUID proposalId, ActivationRequest request) {}
+    private record ActivationCommand(
+            UUID proposalId,
+            ActivationRequest request) {}
 
-    private record ProposalCommand(UUID borrowerId, String externalReference, SimulationResponse simulation) {}
+    private record ProposalCommand(
+            UUID borrowerId,
+            String externalReference,
+            SimulationResponse simulation) {}
 }

@@ -5,5 +5,4 @@ import jakarta.validation.constraints.Size;
 
 public record BorrowerRequest(
         @NotBlank @Size(max = 100) String externalReference,
-        @NotBlank @Size(max = 160) String displayName) {
-}
+        @NotBlank @Size(max = 160) String displayName) {}

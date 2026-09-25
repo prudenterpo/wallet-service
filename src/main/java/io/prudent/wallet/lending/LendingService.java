@@ -170,5 +170,8 @@ public class LendingService {
         return OffsetDateTime.now(clock.withZone(ZoneOffset.UTC));
     }
 
-    private record ContractCommand(UUID borrowerId, String externalReference, SimulationResponse simulation) {}
+    private record ContractCommand(
+            UUID borrowerId,
+            String externalReference,
+            SimulationResponse simulation) {}
 }

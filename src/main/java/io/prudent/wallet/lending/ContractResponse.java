@@ -10,5 +10,4 @@ public record ContractResponse(
         String status,
         BigDecimal originalPrincipal,
         String ruleVersion,
-        List<ScheduleItem> schedule) {
-}
+        List<ScheduleItem> schedule) {}
