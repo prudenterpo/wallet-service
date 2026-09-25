@@ -1,0 +1,4 @@
+{
+  "java.configuration.maven.userSettings": "${workspaceFolder}/.mvn/settings.xml",
+  "maven.settingsFile": "${workspaceFolder}/.mvn/settings.xml"
+}
