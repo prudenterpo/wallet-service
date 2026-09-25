@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: wallet-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/wallet}
+    username: ${DB_USER:wallet}
+    password: ${DB_PASSWORD:wallet-local}
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: non_null
+server:
+  port: ${SERVER_PORT:8080}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+wallet:
+  bootstrap:
+    enabled: ${WALLET_BOOTSTRAP_ENABLED:false}
+    organizations:
+      - name: ${WALLET_ORG_ONE_NAME:Demo Organization}
+        api-key: ${WALLET_ORG_ONE_API_KEY:}
+      - name: ${WALLET_ORG_TWO_NAME:Isolation Organization}
+        api-key: ${WALLET_ORG_TWO_API_KEY:}
