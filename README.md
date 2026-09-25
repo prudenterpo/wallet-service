@@ -43,6 +43,8 @@ For a host-side Maven build, install SDKMAN and activate the repository JDK firs
     sdk env install
     ./mvnw verify
 
+The committed VS Code workspace settings point the Java language server to a project-specific Maven cache under the user's cache directory. Java 25 is selected by the Maven project and the SDKMAN environment. After the first checkout, run Java: Clean Java Language Server Workspace if the editor previously imported the project with another JDK or Maven repository.
+
 The local bootstrap creates two synthetic organizations:
 
 - primary key: local-demo-key

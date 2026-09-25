@@ -20,9 +20,16 @@ public final class IrregularLoanCalculator {
 
     public SimulationResponse calculate(SimulationRequest request) {
         var numbers = new HashSet<Integer>();
-        var inputs = request.installments().stream()
-                .sorted(java.util.Comparator.comparingInt(InstallmentInput::number))
-                .toList();
+        var inputs = new ArrayList<>(request.installments());
+        for (int index = 1; index < inputs.size(); index++) {
+            var current = inputs.get(index);
+            int position = index;
+            while (position > 0 && inputs.get(position - 1).number() > current.number()) {
+                inputs.set(position, inputs.get(position - 1));
+                position--;
+            }
+            inputs.set(position, current);
+        }
         var schedule = new ArrayList<ScheduleItem>(inputs.size());
         BigDecimal totalPresent = BigDecimal.ZERO;
         BigDecimal totalFuture = BigDecimal.ZERO;
