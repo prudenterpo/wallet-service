@@ -44,7 +44,8 @@ final class LocalOrganizationBootstrap implements ApplicationRunner {
     }
 
     private boolean hasApiKey(Properties.Organization organization) {
-        return organization.apiKey() != null && !organization.apiKey().isBlank();
+        String apiKey = organization.apiKey();
+        return apiKey != null && !apiKey.isBlank();
     }
 
     private void insertIfAbsent(Properties.Organization organization) {
