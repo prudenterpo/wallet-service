@@ -9,5 +9,7 @@ public record ContractResponse(
         String externalReference,
         String status,
         BigDecimal originalPrincipal,
+        BigDecimal fee,
+        BigDecimal netAmount,
         String ruleVersion,
         List<ScheduleItem> schedule) {}

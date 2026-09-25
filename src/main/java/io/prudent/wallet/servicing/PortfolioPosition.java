@@ -9,4 +9,6 @@ public record PortfolioPosition(
         BigDecimal originalPrincipal,
         BigDecimal scheduled,
         BigDecimal paid,
-        BigDecimal outstanding) {}
+        BigDecimal outstanding,
+        BigDecimal remainingPresentValue,
+        BigDecimal remainingInterest) {}

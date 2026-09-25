@@ -15,13 +15,15 @@ Wallet Service is an independent proof of concept for originating and servicing 
 
 Financial calculations use the explicit rule version POC-SIMPLE-ACT-365-V1: simple interest, actual elapsed days over 365, installment values supplied as future values and HALF_EVEN rounding for exposed monetary amounts. Payoff uses the nominal outstanding balance. Taxes, penalties, monetary correction, partial reversal and provider-specific rules are outside this POC.
 
+The service applies cash against remaining future value, FIFO by due date. Position `outstanding` is remaining future value, not accrued principal. `remainingPresentValue` is the unpaid fraction of each installment's original present value (`present * remainingFuture / originalFuture`). Origination `fee` reduces `netAmount` at simulation and contract creation; it is not amortized. Amortization `discount` reduces the future-value amount applied and `addition` increases it beyond cash received. A schedule may contain at most 120 installments.
+
 ## Run locally
 
 Requirements: Docker with Compose.
 
     docker compose up --build
 
-The application starts at http://localhost:8080. OpenAPI is available at http://localhost:8080/v3/api-docs, Swagger UI at http://localhost:8080/swagger-ui.html and health at http://localhost:8080/actuator/health.
+The application starts at http://localhost:8080. OpenAPI is available at http://localhost:8080/v3/api-docs, Swagger UI at http://localhost:8080/swagger-ui.html and health at http://localhost:8080/actuator/health. Actuator exposes only health. Local API keys in Compose are for a disposable database; do not reuse them outside this machine.
 
 Local organization keys:
 

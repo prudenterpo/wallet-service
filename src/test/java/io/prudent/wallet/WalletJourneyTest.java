@@ -92,12 +92,45 @@ class WalletJourneyTest {
         JsonNode position = send("GET", "/api/v1/contracts/" + contractId + "/position?asOf=2026-07-01", "primary-key", null, null, 200);
         assertThat(position.get("paid").decimalValue()).isEqualByComparingTo("30.00");
         assertThat(position.get("outstanding").decimalValue()).isEqualByComparingTo("70.00");
+        assertThat(position.get("remainingPresentValue").decimalValue()).isEqualByComparingTo("70.00");
+        assertThat(position.get("installments").get(0).get("paid").decimalValue()).isEqualByComparingTo("30.00");
+        assertThat(a.get("allocations").get(0).get("installmentNumber").asInt()).isEqualTo(1);
+
+        String remaining = "{\"effectiveDate\":\"2999-01-01\",\"amount\":70.00,\"discount\":0.00,\"addition\":0.00,\"paymentMethod\":\"TRANSFER\",\"accountingReference\":\"payment-future\"}";
+        send("POST", "/api/v1/contracts/" + contractId + "/amortizations", "primary-key", "future-settle-key", remaining, 201);
+        assertThat(jdbc.sql("select status from loan_contract where id=:id").param("id", java.util.UUID.fromString(contractId)).query(String.class).single())
+                .isEqualTo("ACTIVE");
+        JsonNode stillOpen = send("GET", "/api/v1/contracts/" + contractId + "/position?asOf=2026-07-01", "primary-key", null, null, 200);
+        assertThat(stillOpen.get("status").stringValue()).isEqualTo("ACTIVE");
+        assertThat(stillOpen.get("outstanding").decimalValue()).isEqualByComparingTo("70.00");
+        JsonNode settledAsOf = send("GET", "/api/v1/contracts/" + contractId + "/position?asOf=2999-01-01", "primary-key", null, null, 200);
+        assertThat(settledAsOf.get("status").stringValue()).isEqualTo("SETTLED");
+
+        String interestTerms = "\"disbursementDate\":\"2026-01-01\",\"annualRate\":0.10000000,\"fee\":2.00,\"installments\":[{\"number\":1,\"dueDate\":\"2027-01-01\",\"amount\":110.00}]";
+        JsonNode interestContract = send("POST", "/api/v1/contracts", "primary-key", "interest-contract-key",
+                "{\"borrowerId\":\"" + borrowerId + "\",\"externalReference\":\"interest-1\",\"terms\":{" + interestTerms + "}}", 201);
+        assertThat(interestContract.get("originalPrincipal").decimalValue()).isEqualByComparingTo("100.00");
+        assertThat(interestContract.get("fee").decimalValue()).isEqualByComparingTo("2.00");
+        assertThat(interestContract.get("netAmount").decimalValue()).isEqualByComparingTo("98.00");
+        String interestPayment = "{\"effectiveDate\":\"2026-07-01\",\"amount\":10.00,\"discount\":0.00,\"addition\":0.00,\"paymentMethod\":\"TRANSFER\",\"accountingReference\":\"interest-pay\"}";
+        JsonNode interestAmortization = send("POST", "/api/v1/contracts/" + interestContract.get("id").stringValue() + "/amortizations",
+                "primary-key", "interest-pay-key", interestPayment, 201);
+        assertThat(interestAmortization.get("allocations").get(0).get("installmentNumber").asInt()).isEqualTo(1);
+        assertThat(interestAmortization.get("remainingBalance").decimalValue()).isEqualByComparingTo("100.00");
+        assertThat(interestAmortization.get("remainingPresentValue").decimalValue()).isEqualByComparingTo("90.91");
+        JsonNode interestPosition = send("GET", "/api/v1/contracts/" + interestContract.get("id").stringValue() + "/position?asOf=2026-07-01",
+                "primary-key", null, null, 200);
+        assertThat(interestPosition.get("outstanding").decimalValue()).isEqualByComparingTo("100.00");
+        assertThat(interestPosition.get("remainingPresentValue").decimalValue()).isEqualByComparingTo("90.91");
+        assertThat(interestPosition.get("remainingInterest").decimalValue()).isEqualByComparingTo("9.09");
+
         String futureTerms = "\"disbursementDate\":\"2027-01-01\",\"annualRate\":0.00000000,\"fee\":0.00,\"installments\":[{\"number\":1,\"dueDate\":\"2028-01-01\",\"amount\":50.00}]";
         String futureContract = "{\"borrowerId\":\"" + borrowerId + "\",\"externalReference\":\"future-contract\",\"terms\":{" + futureTerms + "}}";
         send("POST", "/api/v1/contracts", "primary-key", "future-contract-key", futureContract, 201);
         JsonNode portfolio = send("GET", "/api/v1/portfolio/position?asOf=2026-07-01", "primary-key", null, null, 200);
-        assertThat(portfolio.get("contractCount").asInt()).isEqualTo(1);
-        assertThat(portfolio.get("outstanding").decimalValue()).isEqualByComparingTo("70.00");
+        assertThat(portfolio.get("contractCount").asInt()).isEqualTo(2);
+        assertThat(portfolio.get("outstanding").decimalValue()).isEqualByComparingTo("170.00");
+        assertThat(portfolio.get("remainingPresentValue").decimalValue()).isEqualByComparingTo("160.91");
         send("GET", "/api/v1/contracts/" + contractId + "/position?asOf=2026-07-01", "other-key", null, null, 404);
         JsonNode invalidDate = send("GET", "/api/v1/contracts/" + contractId + "/position?asOf=not-a-date",
                 "primary-key", null, null, 400);

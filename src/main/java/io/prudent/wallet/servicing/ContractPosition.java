@@ -11,7 +11,10 @@ public record ContractPosition(
         LocalDate asOf,
         String status,
         BigDecimal originalPrincipal,
+        BigDecimal originalInterest,
         BigDecimal scheduled,
         BigDecimal paid,
         BigDecimal outstanding,
+        BigDecimal remainingPresentValue,
+        BigDecimal remainingInterest,
         List<InstallmentPosition> installments) {}
