@@ -1,36 +1,17 @@
-# Wallet Service POC
+# Wallet Service
 
-Wallet Service is a deliberately small, independent proof of concept for one irregular-loan servicing vertical. It has no AgroForte runtime dependency and does not claim full FacCred compatibility.
+Wallet Service is an independent proof of concept for servicing irregular loans. It is a small Spring Boot modular monolith with no external business-system dependency.
 
-The product and parity artifacts remain in the sync-brain vault under projects-af/wallet-engine. They are not duplicated in this repository.
+## What it covers
 
-## Included vertical
-
-- organization-scoped access through a local POC API key;
-- minimum borrower reference;
-- deterministic irregular-loan simulation;
+- organization-scoped access with local API keys;
+- borrower references and irregular-loan simulations;
 - idempotent contract creation;
-- historical contract and portfolio position;
+- historical contract and portfolio positions;
 - FIFO amortization with PostgreSQL-backed idempotency;
-- generated OpenAPI and Swagger UI;
-- PostgreSQL 18 schema managed by Flyway;
-- one Docker Compose command for local execution.
+- OpenAPI, PostgreSQL, Flyway and Docker Compose.
 
-## Explicit financial assumptions
-
-The rule version is POC-SIMPLE-ACT-365-V1. It exists to make assumptions visible and configurable through versioned code, not to infer undocumented provider behavior.
-
-- each supplied installment amount is its future value;
-- present value uses simple interest with actual elapsed days divided by 365;
-- working scale is 12 and exposed money is rounded to 2 decimals with HALF_EVEN;
-- no holiday or business-day adjustment is applied;
-- fee is reported separately and subtracted only from the displayed net amount;
-- amortization allocation is amount plus addition minus discount;
-- allocation is FIFO by due date and installment number;
-- amortizations for one contract are accepted only in nondecreasing effective-date order;
-- taxes, penalties, correction, reversal and early-payoff rules are unsupported.
-
-No sanitized FacCred request and response sample was found in the available wallet-engine artifacts. Therefore the included reference test proves the declared formula only. FacCred parity remains unverified and must not be inferred from a passing build.
+Financial calculations use the explicit rule version POC-SIMPLE-ACT-365-V1: simple interest, actual elapsed days over 365, installment values supplied as future values and HALF_EVEN rounding for exposed monetary amounts. Taxes, penalties, monetary correction and provider-specific rules are outside this POC.
 
 ## Run locally
 
@@ -38,27 +19,20 @@ Requirements: Docker with Compose.
 
     docker compose up --build
 
-For a host-side Maven build, install SDKMAN and activate the repository JDK first:
+The application starts at http://localhost:8080. OpenAPI is available at http://localhost:8080/v3/api-docs, Swagger UI at http://localhost:8080/swagger-ui.html and health at http://localhost:8080/actuator/health.
 
-    sdk env install
-    ./mvnw verify
+Local organization keys:
 
-The committed VS Code workspace settings point the Java language server to a project-specific Maven cache under the user's cache directory. Java 25 is selected by the Maven project and the SDKMAN environment. After the first checkout, run Java: Clean Java Language Server Workspace if the editor previously imported the project with another JDK or Maven repository.
+- local-demo-key
+- local-isolation-key
 
-The local bootstrap creates two synthetic organizations:
-
-- primary key: local-demo-key
-- isolation key: local-isolation-key
-
-OpenAPI is available at http://localhost:8080/v3/api-docs and Swagger UI at http://localhost:8080/swagger-ui.html. Health is available at http://localhost:8080/actuator/health.
-
-Stop and remove the disposable database with:
+To stop the application and remove its disposable database:
 
     docker compose down --volumes
 
-## API journey
+## Main API journey
 
-All API calls require X-Organization-Key. Contract creation and amortization also require Idempotency-Key.
+Every API request requires X-Organization-Key. Contract creation and amortization also require Idempotency-Key.
 
 1. POST /api/v1/borrowers
 2. POST /api/v1/simulations
@@ -67,16 +41,17 @@ All API calls require X-Organization-Key. Contract creation and amortization als
 5. POST /api/v1/contracts/{contractId}/amortizations
 6. GET /api/v1/portfolio/position?asOf=YYYY-MM-DD
 
-The generated OpenAPI document is the request and response reference for the running implementation.
+The generated OpenAPI document is the authoritative request and response reference.
 
-## Verification
+## Verify
 
 Use Java 25 and Docker:
 
+    sdk env install
     ./mvnw verify
 
-The intentionally small suite contains one financial reference scenario and one end-to-end BDD-style HTTP scenario. The HTTP scenario starts PostgreSQL 18, applies Flyway, proves the complete journey, submits the same amortization concurrently, rejects a conflicting replay, reconciles positions and denies cross-organization access.
+The test suite runs financial reference cases and a complete HTTP journey against PostgreSQL 18 with Flyway. It covers concurrent idempotency, conflicting replays, organization isolation and portfolio positions.
 
-## POC boundaries
+## Boundaries
 
-This repository does not include deployment, release automation, provider credentials, production authentication, migration tooling, queues, outbox, event sourcing, cloud resources or a compatibility adapter. Local API keys and bootstrap fixtures are for POC execution only.
+This is an executable POC, not a production-ready lending platform. It does not include credit analysis, approval workflow, KYC, signatures, payoff, reversals, billing or remittance files, accounting exports, production authentication, data migration, messaging, cloud infrastructure, deployment or release automation.
