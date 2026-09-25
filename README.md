@@ -4,14 +4,18 @@ Wallet Service is a deliberately small, independent proof of concept for one irr
 
 The product and parity artifacts remain in the sync-brain vault under projects-af/wallet-engine. They are not duplicated in this repository.
 
-## Included vertical
+## Included capabilities
 
 - organization-scoped access through a local POC API key;
 - minimum borrower reference;
 - deterministic irregular-loan simulation;
-- idempotent contract creation;
+- idempotent proposal creation and proposal-to-contract activation;
+- idempotent direct contract creation;
 - historical contract and portfolio position;
 - FIFO amortization with PostgreSQL-backed idempotency;
+- nominal early payoff;
+- latest-amortization reversal;
+- servicing history and local portfolio reconciliation;
 - generated OpenAPI and Swagger UI;
 - PostgreSQL 18 schema managed by Flyway;
 - one Docker Compose command for local execution.
@@ -28,7 +32,10 @@ The rule version is POC-SIMPLE-ACT-365-V1. It exists to make assumptions visible
 - amortization allocation is amount plus addition minus discount;
 - allocation is FIFO by due date and installment number;
 - amortizations for one contract are accepted only in nondecreasing effective-date order;
-- taxes, penalties, correction, reversal and early-payoff rules are unsupported.
+- early payoff uses the nominal outstanding balance with no discount or projected interest;
+- only the latest non-reversed amortization can be reversed, and reversals are integral;
+- all servicing commands are accepted only in nondecreasing effective-date order;
+- taxes, penalties, monetary correction, partial reversal and provider-specific payoff rules are unsupported.
 
 No sanitized FacCred request and response sample was found in the available wallet-engine artifacts. Therefore the included reference test proves the declared formula only. FacCred parity remains unverified and must not be inferred from a passing build.
 
@@ -58,14 +65,19 @@ Stop and remove the disposable database with:
 
 ## API journey
 
-All API calls require X-Organization-Key. Contract creation and amortization also require Idempotency-Key.
+All API calls require X-Organization-Key. Proposal creation, activation, contract creation, amortization, payoff and reversal also require Idempotency-Key.
 
 1. POST /api/v1/borrowers
 2. POST /api/v1/simulations
-3. POST /api/v1/contracts
-4. GET /api/v1/contracts/{contractId}/position?asOf=YYYY-MM-DD
-5. POST /api/v1/contracts/{contractId}/amortizations
-6. GET /api/v1/portfolio/position?asOf=YYYY-MM-DD
+3. POST /api/v1/proposals
+4. POST /api/v1/proposals/{proposalId}/activation
+5. GET /api/v1/contracts/{contractId}/position?asOf=YYYY-MM-DD
+6. POST /api/v1/contracts/{contractId}/amortizations
+7. POST /api/v1/contracts/{contractId}/payoffs
+8. POST /api/v1/contracts/{contractId}/amortizations/{settlementId}/reversal
+9. GET /api/v1/contracts/{contractId}/history
+10. GET /api/v1/portfolio/position?asOf=YYYY-MM-DD
+11. GET /api/v1/portfolio/reconciliation?asOf=YYYY-MM-DD
 
 The generated OpenAPI document is the request and response reference for the running implementation.
 
@@ -75,8 +87,8 @@ Use Java 25 and Docker:
 
     ./mvnw verify
 
-The intentionally small suite contains one financial reference scenario and one end-to-end BDD-style HTTP scenario. The HTTP scenario starts PostgreSQL 18, applies Flyway, proves the complete journey, submits the same amortization concurrently, rejects a conflicting replay, reconciles positions and denies cross-organization access.
+The intentionally small suite contains financial reference scenarios and BDD-style HTTP journeys. They start PostgreSQL 18, apply Flyway, exercise origination and servicing, prove concurrent idempotency and conflicting replay behavior, reconcile positions and deny cross-organization access.
 
 ## POC boundaries
 
-This repository does not include deployment, release automation, provider credentials, production authentication, migration tooling, queues, outbox, event sourcing, cloud resources or a compatibility adapter. Local API keys and bootstrap fixtures are for POC execution only.
+This repository does not include credit analysis, approval workflow, KYC, signatures, billing files, remittance, accounting export, deployment, release automation, provider credentials, production authentication, migration tooling, queues, outbox, event sourcing, cloud resources or a compatibility adapter. History covers servicing actions recorded by this POC, rather than reconstructing the entire contract lifecycle. Reconciliation checks local accounting invariants only. Local API keys and bootstrap fixtures are for POC execution only.

@@ -1,16 +1,31 @@
 package io.prudent.wallet;
 
-import static io.prudent.wallet.lending.LendingModels.*;
-import static io.prudent.wallet.servicing.ServicingModels.*;
-
+import io.prudent.wallet.lending.BorrowerRequest;
+import io.prudent.wallet.lending.BorrowerResponse;
+import io.prudent.wallet.lending.ContractRequest;
+import io.prudent.wallet.lending.ContractResponse;
 import io.prudent.wallet.lending.LendingService;
+import io.prudent.wallet.lending.SimulationRequest;
+import io.prudent.wallet.lending.SimulationResponse;
+import io.prudent.wallet.servicing.AmortizationRequest;
+import io.prudent.wallet.servicing.AmortizationResponse;
+import io.prudent.wallet.servicing.ContractPosition;
+import io.prudent.wallet.servicing.PortfolioPosition;
 import io.prudent.wallet.servicing.ServicingService;
 import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -21,10 +36,14 @@ public final class WalletController {
 
     @PostMapping("/borrowers")
     @ResponseStatus(HttpStatus.CREATED)
-    BorrowerResponse createBorrower(@Valid @RequestBody BorrowerRequest request) { return lending.createBorrower(request); }
+    BorrowerResponse createBorrower(@Valid @RequestBody BorrowerRequest request) {
+        return lending.createBorrower(request);
+    }
 
     @PostMapping("/simulations")
-    SimulationResponse simulate(@Valid @RequestBody SimulationRequest request) { return lending.simulate(request); }
+    SimulationResponse simulate(@Valid @RequestBody SimulationRequest request) {
+        return lending.simulate(request);
+    }
 
     @PostMapping("/contracts")
     @ResponseStatus(HttpStatus.CREATED)
@@ -45,5 +64,7 @@ public final class WalletController {
     }
 
     @GetMapping("/portfolio/position")
-    PortfolioPosition portfolio(@RequestParam LocalDate asOf) { return servicing.portfolioPosition(asOf); }
+    PortfolioPosition portfolio(@RequestParam LocalDate asOf) {
+        return servicing.portfolioPosition(asOf);
+    }
 }

@@ -1,7 +1,5 @@
 package io.prudent.wallet.lending;
 
-import static io.prudent.wallet.lending.LendingModels.*;
-
 import io.prudent.wallet.platform.ApiException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -19,25 +17,17 @@ public final class IrregularLoanCalculator {
     private static final int WORKING_SCALE = 12;
 
     public SimulationResponse calculate(SimulationRequest request) {
-        var numbers = new HashSet<Integer>();
-        var inputs = new ArrayList<>(request.installments());
-        for (int index = 1; index < inputs.size(); index++) {
-            var current = inputs.get(index);
-            int position = index;
-            while (position > 0 && inputs.get(position - 1).number() > current.number()) {
-                inputs.set(position, inputs.get(position - 1));
-                position--;
-            }
-            inputs.set(position, current);
-        }
-        var schedule = new ArrayList<ScheduleItem>(inputs.size());
+        var installmentNumbers = new HashSet<Integer>();
+        var installments = new ArrayList<>(request.installments());
+        installments.sort((left, right) -> Integer.compare(left.number(), right.number()));
+
+        var schedule = new ArrayList<ScheduleItem>(installments.size());
         BigDecimal totalPresent = BigDecimal.ZERO;
         BigDecimal totalFuture = BigDecimal.ZERO;
         BigDecimal totalInterest = BigDecimal.ZERO;
-        for (var input : inputs) {
-            if (!numbers.add(input.number()) || !input.dueDate().isAfter(request.disbursementDate())) {
-                throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_SCHEDULE", "Installment numbers must be unique and due dates must follow disbursement");
-            }
+        for (InstallmentInput input : installments) {
+            validateInstallment(input, request, installmentNumbers);
+
             int days = Math.toIntExact(ChronoUnit.DAYS.between(request.disbursementDate(), input.dueDate()));
             BigDecimal factor = BigDecimal.ONE.add(request.annualRate()
                     .multiply(BigDecimal.valueOf(days)).divide(DAYS_IN_YEAR, WORKING_SCALE, RoundingMode.HALF_EVEN));
@@ -58,9 +48,32 @@ public final class IrregularLoanCalculator {
         if (request.fee().compareTo(present) > 0) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "FEE_EXCEEDS_PRINCIPAL", "Fee cannot exceed calculated principal");
         }
-        return new SimulationResponse(RULE_VERSION, request.annualRate().setScale(8, RoundingMode.HALF_EVEN),
-                money(request.fee()), present, future, interest, money(present.subtract(request.fee())), schedule);
+        return new SimulationResponse(
+                RULE_VERSION,
+                request.annualRate().setScale(8, RoundingMode.HALF_EVEN),
+                money(request.fee()),
+                present,
+                future,
+                interest,
+                money(present.subtract(request.fee())),
+                schedule);
     }
 
-    public static BigDecimal money(BigDecimal value) { return value.setScale(2, RoundingMode.HALF_EVEN); }
+    private void validateInstallment(
+            InstallmentInput installment,
+            SimulationRequest request,
+            HashSet<Integer> installmentNumbers) {
+        boolean hasUniqueNumber = installmentNumbers.add(installment.number());
+        boolean isAfterDisbursement = installment.dueDate().isAfter(request.disbursementDate());
+        if (!hasUniqueNumber || !isAfterDisbursement) {
+            throw new ApiException(
+                    HttpStatus.BAD_REQUEST,
+                    "INVALID_SCHEDULE",
+                    "Installment numbers must be unique and due dates must follow disbursement");
+        }
+    }
+
+    public static BigDecimal money(BigDecimal value) {
+        return value.setScale(2, RoundingMode.HALF_EVEN);
+    }
 }

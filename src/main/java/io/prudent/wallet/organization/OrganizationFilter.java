@@ -30,13 +30,19 @@ final class OrganizationFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        var key = request.getHeader("X-Organization-Key");
+        String key = request.getHeader("X-Organization-Key");
         if (key == null || key.isBlank()) {
             unauthorized(response, "MISSING_ORGANIZATION_KEY", "X-Organization-Key is required");
             return;
         }
-        var organizationId = jdbc.sql("select id from organization where api_key_hash = :hash")
-                .param("hash", Hashing.sha256(key)).query(UUID.class).optional();
+        var organizationId = jdbc.sql("""
+                        select id
+                        from organization
+                        where api_key_hash = :apiKeyHash
+                        """)
+                .param("apiKeyHash", Hashing.sha256(key))
+                .query(UUID.class)
+                .optional();
         if (organizationId.isEmpty()) {
             unauthorized(response, "INVALID_ORGANIZATION_KEY", "Organization key is invalid");
             return;

@@ -3,8 +3,6 @@ package io.prudent.wallet.lending;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.prudent.wallet.lending.LendingModels.InstallmentInput;
-import io.prudent.wallet.lending.LendingModels.SimulationRequest;
 import io.prudent.wallet.platform.ApiException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
