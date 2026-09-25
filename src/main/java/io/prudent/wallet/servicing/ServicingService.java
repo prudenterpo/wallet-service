@@ -27,6 +27,7 @@ public class ServicingService {
             LocalDate dueDate,
             BigDecimal scheduled,
             BigDecimal paid) {
+        // TODO: Validate the nominal outstanding-balance rule against approved servicing rules.
         BigDecimal outstanding() { return money(scheduled.subtract(paid)); }
     }
     private record ContractSummary(
@@ -59,6 +60,7 @@ public class ServicingService {
                 .optional().orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CONTRACT_NOT_FOUND", "Contract was not found in this organization"));
         validateReferenceDate(contract, request.effectiveDate());
         validateEffectiveDateOrder(contract.id(), request.effectiveDate());
+        // TODO: Validate addition, discount, and submitted-amount treatment against approved servicing rules.
         BigDecimal allocatedAmount = money(request.amount().add(request.addition()).subtract(request.discount()));
         if (allocatedAmount.signum() <= 0)
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMORTIZATION_TOTAL", "Amount plus addition minus discount must be positive");
@@ -111,6 +113,7 @@ public class ServicingService {
         validateReferenceDate(contract, request.effectiveDate());
         validateEffectiveDateOrder(contract.id(), request.effectiveDate());
         var balances = balances(contract.id(), request.effectiveDate());
+        // TODO: Validate nominal payoff and future-interest treatment against approved payoff rules.
         BigDecimal outstanding = sumOutstanding(balances);
         if (outstanding.signum() == 0)
             throw new ApiException(HttpStatus.CONFLICT, "CONTRACT_ALREADY_SETTLED", "Contract has no nominal balance to settle");
@@ -180,6 +183,7 @@ public class ServicingService {
 
     public ReconciliationResponse reconciliation(LocalDate asOf) {
         UUID organizationId = OrganizationContext.requiredId();
+        // TODO: Validate reconciliation totals and mismatch criteria against approved accounting rules.
         return jdbc.sql("with eligible_contracts as (select id from loan_contract where organization_id=:org and disbursement_date<=:asOf), installment_position as (select i.id,i.future_value scheduled,coalesce(sum(a.amount) filter (where s.effective_date<=:asOf and not exists (select 1 from settlement_reversal r where r.settlement_id=s.id and r.effective_date<=:asOf)),0) paid from installment i join eligible_contracts c on c.id=i.contract_id left join settlement_allocation a on a.installment_id=i.id left join settlement s on s.id=a.settlement_id group by i.id,i.future_value), allocation_mismatch as (select count(*) mismatches from settlement s join eligible_contracts c on c.id=s.contract_id where s.effective_date<=:asOf and s.allocated_amount<>(select coalesce(sum(a.amount),0) from settlement_allocation a where a.settlement_id=s.id)) select (select count(*) from eligible_contracts),coalesce(sum(scheduled),0),coalesce(sum(paid),0),count(*) filter (where paid>scheduled),(select mismatches from allocation_mismatch) from installment_position")
                 .param("org", organizationId).param("asOf", asOf).query((row, ignored) -> {
                     BigDecimal scheduled = money(row.getBigDecimal(2));
@@ -194,6 +198,7 @@ public class ServicingService {
 
     public ContractPosition contractPosition(UUID contractId, LocalDate asOf) {
         UUID organizationId = OrganizationContext.requiredId();
+        // TODO: Validate historical paid and outstanding calculations against approved portfolio rules.
         ContractSummary contract = jdbc.sql("select id,external_reference,original_principal,disbursement_date from loan_contract where id=:id and organization_id=:org")
                 .param("id", contractId).param("org", organizationId).query((row, ignored) ->
                         new ContractSummary(row.getObject(1, UUID.class), row.getString(2), row.getBigDecimal(3), row.getObject(4, LocalDate.class)))
@@ -217,6 +222,7 @@ public class ServicingService {
 
     public PortfolioPosition portfolioPosition(LocalDate asOf) {
         UUID organizationId = OrganizationContext.requiredId();
+        // TODO: Validate portfolio aggregation and reversal treatment against approved portfolio rules.
         return jdbc.sql("with positions as (select c.id,c.original_principal,coalesce(sum(i.future_value),0) scheduled,coalesce(sum(p.paid),0) paid from loan_contract c join installment i on i.contract_id=c.id left join lateral (select coalesce(sum(a.amount),0) paid from settlement_allocation a join settlement s on s.id=a.settlement_id where a.installment_id=i.id and s.effective_date<=:asOf and not exists (select 1 from settlement_reversal r where r.settlement_id=s.id and r.effective_date<=:asOf)) p on true where c.organization_id=:org and c.disbursement_date<=:asOf group by c.id,c.original_principal) select count(*),coalesce(sum(original_principal),0),coalesce(sum(scheduled),0),coalesce(sum(paid),0) from positions")
                 .param("asOf", asOf).param("org", organizationId).query((row, ignored) -> {
                     BigDecimal scheduled = money(row.getBigDecimal(3));
@@ -232,6 +238,7 @@ public class ServicingService {
     }
 
     private BigDecimal totalOutstanding(UUID contractId) {
+        // TODO: Validate current outstanding aggregation and reversal treatment against approved servicing rules.
         return money(jdbc.sql("select coalesce(sum(i.future_value),0)-coalesce((select sum(a.amount) from settlement_allocation a join settlement s on s.id=a.settlement_id join installment x on x.id=a.installment_id where x.contract_id=:contract and not exists (select 1 from settlement_reversal r where r.settlement_id=s.id)),0) from installment i where i.contract_id=:contract")
                 .param("contract", contractId).query(BigDecimal.class).single());
     }
@@ -262,6 +269,7 @@ public class ServicingService {
 
     private java.util.List<Allocation> allocate(UUID settlementId, UUID contractId, BigDecimal amount,
                                                  java.util.List<InstallmentBalance> balances) {
+        // TODO: Validate FIFO allocation and installment-order rules against approved servicing rules.
         BigDecimal remaining = amount;
         var allocations = new ArrayList<Allocation>();
         for (var balance : balances) {

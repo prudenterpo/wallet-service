@@ -28,6 +28,7 @@ public final class IrregularLoanCalculator {
         for (InstallmentInput input : installments) {
             validateInstallment(input, request, installmentNumbers);
 
+            // TODO: Validate the ACT/365 simple-interest present-value formula against approved financial rules.
             int days = Math.toIntExact(ChronoUnit.DAYS.between(request.disbursementDate(), input.dueDate()));
             BigDecimal factor = BigDecimal.ONE.add(request.annualRate()
                     .multiply(BigDecimal.valueOf(days)).divide(DAYS_IN_YEAR, WORKING_SCALE, RoundingMode.HALF_EVEN));
@@ -42,6 +43,7 @@ public final class IrregularLoanCalculator {
         BigDecimal present = money(totalPresent);
         BigDecimal future = money(totalFuture);
         BigDecimal interest = money(totalInterest);
+        // TODO: Validate aggregation, fee treatment, and monetary rounding against approved financial rules.
         if (present.signum() <= 0 || present.compareTo(MAX_STORED_MONEY) > 0) {
             throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "PRINCIPAL_OUT_OF_RANGE", "Calculated principal cannot be stored by this rule version");
         }
