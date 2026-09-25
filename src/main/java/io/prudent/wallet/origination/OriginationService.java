@@ -93,7 +93,9 @@ public class OriginationService {
         jdbc.sql("update loan_proposal set status='ACTIVATED',activated_at=:now where id=:id")
                 .param("now", now).param("id", proposal.id()).update();
         var response = new ContractResponse(contractId, request.contractExternalReference(), "ACTIVE",
-                proposal.principal(), proposal.ruleVersion(), schedule);
+                proposal.principal(), proposal.fee(),
+                IrregularLoanCalculator.money(proposal.principal().subtract(proposal.fee())),
+                proposal.ruleVersion(), schedule);
         idempotency.remember(organizationId, "ACTIVATION", key, fingerprint, response);
         return response;
     }

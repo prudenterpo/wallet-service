@@ -8,6 +8,8 @@ public record InstallmentPosition(
         UUID installmentId,
         int number,
         LocalDate dueDate,
+        BigDecimal presentValue,
         BigDecimal scheduled,
         BigDecimal paid,
-        BigDecimal outstanding) {}
+        BigDecimal outstanding,
+        BigDecimal remainingPresentValue) {}

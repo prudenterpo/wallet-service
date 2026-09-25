@@ -1,0 +1,2 @@
+create index idx_settlement_allocation_installment on settlement_allocation(installment_id);
+create index idx_settlement_allocation_contract on settlement_allocation(contract_id);

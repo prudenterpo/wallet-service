@@ -82,6 +82,8 @@ public class LendingService {
                 request.externalReference(),
                 "ACTIVE",
                 simulation.totalPresentValue(),
+                simulation.fee(),
+                simulation.netAmount(),
                 simulation.ruleVersion(),
                 simulation.schedule());
         idempotency.remember(organizationId, CONTRACT_OPERATION, idempotencyKey, fingerprint, response);

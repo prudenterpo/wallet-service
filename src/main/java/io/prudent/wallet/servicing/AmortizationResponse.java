@@ -12,4 +12,5 @@ public record AmortizationResponse(
         BigDecimal submittedAmount,
         BigDecimal allocatedAmount,
         BigDecimal remainingBalance,
+        BigDecimal remainingPresentValue,
         List<Allocation> allocations) {}
