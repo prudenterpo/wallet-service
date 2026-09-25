@@ -18,5 +18,4 @@ public record SimulationRequest(
         @Digits(integer = 4, fraction = 8)
         BigDecimal annualRate,
         @NotNull @DecimalMin("0.00") @Digits(integer = 17, fraction = 2) BigDecimal fee,
-        @NotEmpty List<@Valid InstallmentInput> installments) {
-}
+        @NotEmpty List<@Valid InstallmentInput> installments) {}

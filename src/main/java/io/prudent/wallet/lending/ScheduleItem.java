@@ -9,5 +9,4 @@ public record ScheduleItem(
         int days,
         BigDecimal presentValue,
         BigDecimal futureValue,
-        BigDecimal interest) {
-}
+        BigDecimal interest) {}

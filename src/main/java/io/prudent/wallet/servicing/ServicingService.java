@@ -21,11 +21,24 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ServicingService {
-    private record InstallmentBalance(UUID id, int number, LocalDate dueDate, BigDecimal scheduled, BigDecimal paid) {
+    private record InstallmentBalance(
+            UUID id,
+            int number,
+            LocalDate dueDate,
+            BigDecimal scheduled,
+            BigDecimal paid) {
         BigDecimal outstanding() { return money(scheduled.subtract(paid)); }
     }
-    private record ContractSummary(UUID id, String reference, BigDecimal principal, LocalDate disbursementDate) {}
-    private record SettlementSummary(UUID id, LocalDate effectiveDate, BigDecimal allocatedAmount, String type) {}
+    private record ContractSummary(
+            UUID id,
+            String reference,
+            BigDecimal principal,
+            LocalDate disbursementDate) {}
+    private record SettlementSummary(
+            UUID id,
+            LocalDate effectiveDate,
+            BigDecimal allocatedAmount,
+            String type) {}
 
     private final JdbcClient jdbc;
     private final IdempotencyStore idempotency;
@@ -283,9 +296,22 @@ public class ServicingService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "DATE_BEFORE_DISBURSEMENT", "Reference date cannot precede contract disbursement");
     }
 
-    private record Command(UUID contractId, LocalDate effectiveDate, BigDecimal amount, BigDecimal discount,
-                           BigDecimal addition, String paymentMethod, String accountingReference) {}
-    private record PayoffCommand(UUID contractId, LocalDate effectiveDate, String paymentMethod,
-                                 String accountingReference) {}
-    private record ReversalCommand(UUID contractId, UUID settlementId, LocalDate effectiveDate, String reason) {}
+    private record Command(
+            UUID contractId,
+            LocalDate effectiveDate,
+            BigDecimal amount,
+            BigDecimal discount,
+            BigDecimal addition,
+            String paymentMethod,
+            String accountingReference) {}
+    private record PayoffCommand(
+            UUID contractId,
+            LocalDate effectiveDate,
+            String paymentMethod,
+            String accountingReference) {}
+    private record ReversalCommand(
+            UUID contractId,
+            UUID settlementId,
+            LocalDate effectiveDate,
+            String reason) {}
 }

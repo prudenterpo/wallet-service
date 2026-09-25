@@ -11,5 +11,4 @@ public record SimulationResponse(
         BigDecimal totalFutureValue,
         BigDecimal totalInterest,
         BigDecimal netAmount,
-        List<ScheduleItem> schedule) {
-}
+        List<ScheduleItem> schedule) {}

@@ -9,5 +9,4 @@ import java.util.UUID;
 public record ContractRequest(
         @NotNull UUID borrowerId,
         @NotBlank @Size(max = 100) String externalReference,
-        @Valid @NotNull SimulationRequest terms) {
-}
+        @Valid @NotNull SimulationRequest terms) {}
