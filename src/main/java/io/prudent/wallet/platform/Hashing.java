@@ -6,12 +6,14 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
 public final class Hashing {
-    private Hashing() {}
+    private Hashing() {
+    }
 
     public static String sha256(String value) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
-                    .digest(value.getBytes(StandardCharsets.UTF_8)));
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException(exception);
         }

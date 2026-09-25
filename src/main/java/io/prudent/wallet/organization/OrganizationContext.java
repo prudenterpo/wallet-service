@@ -4,14 +4,23 @@ import java.util.UUID;
 
 public final class OrganizationContext {
     private static final ThreadLocal<UUID> CURRENT = new ThreadLocal<>();
-    private OrganizationContext() {}
+
+    private OrganizationContext() {
+    }
 
     public static UUID requiredId() {
-        var id = CURRENT.get();
-        if (id == null) throw new IllegalStateException("Organization context is not available");
+        UUID id = CURRENT.get();
+        if (id == null) {
+            throw new IllegalStateException("Organization context is not available");
+        }
         return id;
     }
 
-    static void set(UUID id) { CURRENT.set(id); }
-    static void clear() { CURRENT.remove(); }
+    static void set(UUID id) {
+        CURRENT.set(id);
+    }
+
+    static void clear() {
+        CURRENT.remove();
+    }
 }
