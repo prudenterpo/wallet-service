@@ -17,7 +17,8 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
@@ -25,7 +26,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class WalletJourneyTest {
     @Container
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:18-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(DockerImageName.parse("postgres:18-alpine"));
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -57,17 +58,20 @@ class WalletJourneyTest {
         var borrowerFirst = CompletableFuture.supplyAsync(() -> uncheckedSend("POST", "/api/v1/borrowers", "primary-key", null, borrowerBody, 201));
         var borrowerSecond = CompletableFuture.supplyAsync(() -> uncheckedSend("POST", "/api/v1/borrowers", "primary-key", null, borrowerBody, 201));
         JsonNode borrower = borrowerFirst.join();
-        assertThat(borrowerSecond.join().get("id").asText()).isEqualTo(borrower.get("id").asText());
-        String borrowerId = borrower.get("id").asText();
+        assertThat(borrowerSecond.join().get("id").stringValue()).isEqualTo(borrower.get("id").stringValue());
+        String borrowerId = borrower.get("id").stringValue();
         String terms = "\"disbursementDate\":\"2026-01-01\",\"annualRate\":0.00000000,\"fee\":0.00,\"installments\":[{\"number\":1,\"dueDate\":\"2026-06-01\",\"amount\":40.00},{\"number\":2,\"dueDate\":\"2026-12-01\",\"amount\":60.00}]";
         JsonNode simulation = send("POST", "/api/v1/simulations", "primary-key", null, "{" + terms + "}", 200);
         assertThat(simulation.get("totalPresentValue").decimalValue()).isEqualByComparingTo("100.00");
 
         String contractBody = "{\"borrowerId\":\"" + borrowerId + "\",\"externalReference\":\"contract-1\",\"terms\":{" + terms + "}}";
         JsonNode contract = send("POST", "/api/v1/contracts", "primary-key", "contract-key", contractBody, 201);
-        String contractId = contract.get("id").asText();
+        String contractId = contract.get("id").stringValue();
         JsonNode replay = send("POST", "/api/v1/contracts", "primary-key", "contract-key", contractBody, 201);
-        assertThat(replay.get("id").asText()).isEqualTo(contractId);
+        assertThat(replay.get("id").stringValue()).isEqualTo(contractId);
+        JsonNode decimalReplay = send("POST", "/api/v1/contracts", "primary-key", "contract-key",
+                contractBody.replace("40.00", "40.0").replace("60.00", "60.0"), 201);
+        assertThat(decimalReplay.get("id").stringValue()).isEqualTo(contractId);
         send("POST", "/api/v1/contracts", "primary-key", "duplicate-contract-key", contractBody, 409);
 
         String amortization = "{\"effectiveDate\":\"2026-07-01\",\"amount\":30.00,\"discount\":0.00,\"addition\":0.00,\"paymentMethod\":\"TRANSFER\",\"accountingReference\":\"payment-1\"}";
@@ -75,7 +79,10 @@ class WalletJourneyTest {
         var second = CompletableFuture.supplyAsync(() -> uncheckedSend(contractId, amortization));
         JsonNode a = first.join();
         JsonNode b = second.join();
-        assertThat(a.get("settlementId").asText()).isEqualTo(b.get("settlementId").asText());
+        assertThat(a.get("settlementId").stringValue()).isEqualTo(b.get("settlementId").stringValue());
+        JsonNode decimalAmortizationReplay = send("POST", "/api/v1/contracts/" + contractId + "/amortizations",
+                "primary-key", "payment-key", amortization.replace("30.00", "30.0"), 201);
+        assertThat(decimalAmortizationReplay.get("settlementId").stringValue()).isEqualTo(a.get("settlementId").stringValue());
         assertThat(jdbc.sql("select count(*) from settlement").query(Integer.class).single()).isEqualTo(1);
         String conflictingAmortization = amortization.replace("30.00", "31.00");
         send("POST", "/api/v1/contracts/" + contractId + "/amortizations", "primary-key", "payment-key", conflictingAmortization, 409);
@@ -92,6 +99,9 @@ class WalletJourneyTest {
         assertThat(portfolio.get("contractCount").asInt()).isEqualTo(1);
         assertThat(portfolio.get("outstanding").decimalValue()).isEqualByComparingTo("70.00");
         send("GET", "/api/v1/contracts/" + contractId + "/position?asOf=2026-07-01", "other-key", null, null, 404);
+        JsonNode invalidDate = send("GET", "/api/v1/contracts/" + contractId + "/position?asOf=not-a-date",
+                "primary-key", null, null, 400);
+        assertThat(invalidDate.get("code").stringValue()).isEqualTo("INVALID_REQUEST");
     }
 
     private JsonNode uncheckedSend(String contractId, String body) {

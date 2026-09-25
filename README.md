@@ -38,6 +38,11 @@ Requirements: Docker with Compose.
 
     docker compose up --build
 
+For a host-side Maven build, install SDKMAN and activate the repository JDK first:
+
+    sdk env install
+    ./mvnw verify
+
 The local bootstrap creates two synthetic organizations:
 
 - primary key: local-demo-key
