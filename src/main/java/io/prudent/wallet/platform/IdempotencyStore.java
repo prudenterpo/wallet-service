@@ -5,6 +5,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
@@ -30,7 +31,7 @@ public final class IdempotencyStore {
         catch (JacksonException exception) { throw new IllegalStateException(exception); }
     }
 
-    public <T> T replay(UUID organizationId, String operation, String key, String fingerprint, Class<T> type) {
+    public <T> @Nullable T replay(UUID organizationId, String operation, String key, String fingerprint, Class<T> type) {
         return jdbc.sql("select request_fingerprint, response_json::text from idempotency_record where organization_id=:org and operation=:operation and idempotency_key=:key")
                 .param("org", organizationId).param("operation", operation).param("key", key)
                 .query((row, ignored) -> {

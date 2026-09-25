@@ -7,6 +7,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.jspecify.annotations.Nullable;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -20,7 +21,7 @@ import org.springframework.stereotype.Component;
 final class LocalOrganizationBootstrap implements ApplicationRunner {
     @ConfigurationProperties("wallet.bootstrap")
     record Properties(boolean enabled, List<Organization> organizations) {
-        record Organization(String name, String apiKey) {}
+        record Organization(String name, @Nullable String apiKey) {}
     }
 
     private final JdbcClient jdbc;

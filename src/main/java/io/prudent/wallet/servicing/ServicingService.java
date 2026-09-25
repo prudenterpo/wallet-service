@@ -36,7 +36,8 @@ public class ServicingService {
     public AmortizationResponse amortize(UUID contractId, String key, AmortizationRequest request) {
         UUID organizationId = OrganizationContext.requiredId();
         idempotency.lock(organizationId, "AMORTIZATION", key);
-        String fingerprint = idempotency.fingerprint(new Command(contractId, request));
+        String fingerprint = idempotency.fingerprint(new Command(contractId, request.effectiveDate(), money(request.amount()),
+                money(request.discount()), money(request.addition()), request.paymentMethod(), request.accountingReference()));
         var replay = idempotency.replay(organizationId, "AMORTIZATION", key, fingerprint, AmortizationResponse.class);
         if (replay != null) return replay;
 
@@ -53,9 +54,9 @@ public class ServicingService {
         if (allocatedAmount.signum() <= 0)
             throw new ApiException(HttpStatus.BAD_REQUEST, "INVALID_AMORTIZATION_TOTAL", "Amount plus addition minus discount must be positive");
         var balances = balances(contract.id(), request.effectiveDate());
-        BigDecimal outstanding = money(balances.stream().map(InstallmentBalance::outstanding).reduce(BigDecimal.ZERO, BigDecimal::add));
+        BigDecimal outstanding = sumOutstanding(balances);
         if (allocatedAmount.compareTo(outstanding) > 0)
-            throw new ApiException(HttpStatus.UNPROCESSABLE_ENTITY, "AMOUNT_EXCEEDS_BALANCE", "Allocated amount exceeds contract balance on the effective date");
+            throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "AMOUNT_EXCEEDS_BALANCE", "Allocated amount exceeds contract balance on the effective date");
 
         UUID settlementId = UUID.randomUUID();
         jdbc.sql("insert into settlement(id,organization_id,contract_id,effective_date,submitted_amount,discount,addition,allocated_amount,payment_method,accounting_reference,created_at) values (:id,:org,:contract,:date,:amount,:discount,:addition,:allocated,:method,:accounting,:now)")
@@ -70,8 +71,9 @@ public class ServicingService {
             if (remaining.signum() == 0) break;
             BigDecimal allocation = remaining.min(balance.outstanding());
             if (allocation.signum() > 0) {
-                jdbc.sql("insert into settlement_allocation(settlement_id,installment_id,amount) values (:settlement,:installment,:amount)")
-                        .param("settlement", settlementId).param("installment", balance.id()).param("amount", allocation).update();
+                jdbc.sql("insert into settlement_allocation(settlement_id,installment_id,contract_id,amount) values (:settlement,:installment,:contract,:amount)")
+                        .param("settlement", settlementId).param("installment", balance.id()).param("contract", contract.id())
+                        .param("amount", allocation).update();
                 allocations.add(new Allocation(balance.id(), balance.number(), allocation));
                 remaining = money(remaining.subtract(allocation));
             }
@@ -94,8 +96,14 @@ public class ServicingService {
                 .optional().orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "CONTRACT_NOT_FOUND", "Contract was not found in this organization"));
         validateReferenceDate(contract, asOf);
         var items = balances(contractId, asOf);
-        BigDecimal scheduled = money(items.stream().map(InstallmentBalance::scheduled).reduce(BigDecimal.ZERO, BigDecimal::add));
-        BigDecimal paid = money(items.stream().map(InstallmentBalance::paid).reduce(BigDecimal.ZERO, BigDecimal::add));
+        BigDecimal scheduled = BigDecimal.ZERO;
+        BigDecimal paid = BigDecimal.ZERO;
+        for (var item : items) {
+            scheduled = scheduled.add(item.scheduled());
+            paid = paid.add(item.paid());
+        }
+        scheduled = money(scheduled);
+        paid = money(paid);
         BigDecimal outstanding = money(scheduled.subtract(paid));
         var positions = items.stream().map(item -> new InstallmentPosition(item.id(), item.number(), item.dueDate(),
                 money(item.scheduled()), money(item.paid()), item.outstanding())).toList();
@@ -124,10 +132,17 @@ public class ServicingService {
                 .param("contract", contractId).query(BigDecimal.class).single());
     }
 
+    private BigDecimal sumOutstanding(java.util.List<InstallmentBalance> balances) {
+        BigDecimal result = BigDecimal.ZERO;
+        for (var balance : balances) result = result.add(balance.outstanding());
+        return money(result);
+    }
+
     private void validateReferenceDate(ContractSummary contract, LocalDate referenceDate) {
         if (referenceDate.isBefore(contract.disbursementDate()))
             throw new ApiException(HttpStatus.BAD_REQUEST, "DATE_BEFORE_DISBURSEMENT", "Reference date cannot precede contract disbursement");
     }
 
-    private record Command(UUID contractId, AmortizationRequest request) {}
+    private record Command(UUID contractId, LocalDate effectiveDate, BigDecimal amount, BigDecimal discount,
+                           BigDecimal addition, String paymentMethod, String accountingReference) {}
 }
