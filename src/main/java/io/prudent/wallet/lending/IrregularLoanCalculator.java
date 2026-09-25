@@ -63,4 +63,18 @@ public final class IrregularLoanCalculator {
     }
 
     public static BigDecimal money(BigDecimal value) { return value.setScale(2, RoundingMode.HALF_EVEN); }
+
+    public static BigDecimal remainingPresentValue(BigDecimal originalPresent, BigDecimal originalFuture, BigDecimal outstandingFuture) {
+        if (outstandingFuture.signum() <= 0 || originalFuture.signum() <= 0) {
+            return money(BigDecimal.ZERO);
+        }
+        if (outstandingFuture.compareTo(originalFuture) >= 0) {
+            return money(originalPresent);
+        }
+        return money(originalPresent.multiply(outstandingFuture).divide(originalFuture, WORKING_SCALE, RoundingMode.HALF_EVEN));
+    }
+
+    public static BigDecimal remainingInterest(BigDecimal outstandingFuture, BigDecimal remainingPresent) {
+        return money(outstandingFuture.subtract(remainingPresent));
+    }
 }

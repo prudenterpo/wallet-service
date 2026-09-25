@@ -1,6 +1,8 @@
 package io.prudent.wallet.servicing;
 
 import static io.prudent.wallet.lending.IrregularLoanCalculator.money;
+import static io.prudent.wallet.lending.IrregularLoanCalculator.remainingInterest;
+import static io.prudent.wallet.lending.IrregularLoanCalculator.remainingPresentValue;
 import static io.prudent.wallet.servicing.ServicingModels.*;
 
 import io.prudent.wallet.organization.OrganizationContext;
@@ -8,10 +10,11 @@ import io.prudent.wallet.platform.ApiException;
 import io.prudent.wallet.platform.IdempotencyStore;
 import java.math.BigDecimal;
 import java.time.Clock;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.Nullable;
@@ -23,10 +26,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class ServicingService {
-    private record InstallmentBalance(UUID id, int number, LocalDate dueDate, BigDecimal scheduled, BigDecimal paid) {
+    private record InstallmentBalance(UUID id, int number, LocalDate dueDate, BigDecimal present, BigDecimal scheduled, BigDecimal paid) {
         BigDecimal outstanding() { return money(scheduled.subtract(paid)); }
+        BigDecimal remainingPresent() { return remainingPresentValue(present, scheduled, outstanding()); }
     }
     private record ContractSummary(UUID id, String reference, BigDecimal principal, LocalDate disbursementDate) {}
+    private record PortfolioRow(UUID contractId, BigDecimal principal, BigDecimal present, BigDecimal scheduled, BigDecimal paid) {}
 
     private final JdbcClient jdbc;
     private final IdempotencyStore idempotency;
@@ -56,7 +61,7 @@ public class ServicingService {
         var balances = balances(contract.id(), request.effectiveDate());
         BigDecimal outstanding = sumOutstanding(balances);
         if (allocatedAmount.compareTo(outstanding) > 0)
-            throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "AMOUNT_EXCEEDS_BALANCE", "Allocated amount exceeds contract balance on the effective date");
+            throw new ApiException(HttpStatus.UNPROCESSABLE_CONTENT, "AMOUNT_EXCEEDS_BALANCE", "Allocated amount exceeds remaining future value on the effective date");
 
         UUID settlementId = UUID.randomUUID();
         jdbc.sql("insert into settlement(id,organization_id,contract_id,effective_date,submitted_amount,discount,addition,allocated_amount,payment_method,accounting_reference,created_at) values (:id,:org,:contract,:date,:amount,:discount,:addition,:allocated,:method,:accounting,:now)")
@@ -78,12 +83,14 @@ public class ServicingService {
                 remaining = money(remaining.subtract(allocation));
             }
         }
-        BigDecimal remainingBalance = money(outstanding.subtract(allocatedAmount));
-        BigDecimal currentOutstanding = totalOutstanding(contract.id());
-        if (currentOutstanding.signum() == 0)
+        var after = balances(contract.id(), request.effectiveDate());
+        BigDecimal remainingBalance = sumOutstanding(after);
+        BigDecimal remainingPresent = sumRemainingPresent(after);
+        LocalDate today = LocalDate.now(clock.withZone(ZoneOffset.UTC));
+        if (totalOutstanding(contract.id()).signum() == 0 && !request.effectiveDate().isAfter(today))
             jdbc.sql("update loan_contract set status='SETTLED' where id=:id").param("id", contract.id()).update();
         var response = new AmortizationResponse(settlementId, contract.id(), request.effectiveDate(),
-                money(request.amount()), allocatedAmount, remainingBalance, allocations);
+                money(request.amount()), allocatedAmount, remainingBalance, remainingPresent, allocations);
         idempotency.remember(organizationId, "AMORTIZATION", key, fingerprint, response);
         return response;
     }
@@ -98,33 +105,66 @@ public class ServicingService {
         var items = balances(contractId, asOf);
         BigDecimal scheduled = BigDecimal.ZERO;
         BigDecimal paid = BigDecimal.ZERO;
+        BigDecimal originalInterest = BigDecimal.ZERO;
+        BigDecimal remainingPresent = BigDecimal.ZERO;
         for (var item : items) {
             scheduled = scheduled.add(item.scheduled());
             paid = paid.add(item.paid());
+            originalInterest = originalInterest.add(item.scheduled().subtract(item.present()));
+            remainingPresent = remainingPresent.add(item.remainingPresent());
         }
         scheduled = money(scheduled);
         paid = money(paid);
+        originalInterest = money(originalInterest);
+        remainingPresent = money(remainingPresent);
         BigDecimal outstanding = money(scheduled.subtract(paid));
         var positions = items.stream().map(item -> new InstallmentPosition(item.id(), item.number(), item.dueDate(),
-                money(item.scheduled()), money(item.paid()), item.outstanding())).toList();
+                money(item.present()), money(item.scheduled()), money(item.paid()), item.outstanding(), item.remainingPresent())).toList();
         return new ContractPosition(contract.id(), contract.reference(), asOf, outstanding.signum() == 0 ? "SETTLED" : "ACTIVE",
-                money(contract.principal()), scheduled, paid, outstanding, positions);
+                money(contract.principal()), originalInterest, scheduled, paid, outstanding, remainingPresent,
+                remainingInterest(outstanding, remainingPresent), positions);
     }
 
     public PortfolioPosition portfolioPosition(LocalDate asOf) {
         UUID organizationId = OrganizationContext.requiredId();
-        return jdbc.sql("with positions as (select c.id,c.original_principal,coalesce(sum(i.future_value),0) scheduled,coalesce(sum(p.paid),0) paid from loan_contract c join installment i on i.contract_id=c.id left join lateral (select coalesce(sum(a.amount),0) paid from settlement_allocation a join settlement s on s.id=a.settlement_id where a.installment_id=i.id and s.effective_date<=:asOf) p on true where c.organization_id=:org and c.disbursement_date<=:asOf group by c.id,c.original_principal) select count(*),coalesce(sum(original_principal),0),coalesce(sum(scheduled),0),coalesce(sum(paid),0) from positions")
-                .param("asOf", asOf).param("org", organizationId).query((row, ignored) -> {
-                    BigDecimal scheduled = money(row.getBigDecimal(3));
-                    BigDecimal paid = money(row.getBigDecimal(4));
-                    return new PortfolioPosition(asOf, row.getInt(1), money(row.getBigDecimal(2)), scheduled, paid, money(scheduled.subtract(paid)));
-                }).single();
+        var rows = jdbc.sql("""
+                select c.id, c.original_principal, i.present_value, i.future_value,
+                       coalesce((select sum(a.amount) from settlement_allocation a join settlement s on s.id = a.settlement_id
+                                 where a.installment_id = i.id and s.effective_date <= :asOf), 0)
+                from loan_contract c
+                join installment i on i.contract_id = c.id
+                where c.organization_id = :org and c.disbursement_date <= :asOf
+                """)
+                .param("asOf", asOf).param("org", organizationId)
+                .query((row, ignored) -> new PortfolioRow(row.getObject(1, UUID.class), row.getBigDecimal(2),
+                        row.getBigDecimal(3), row.getBigDecimal(4), row.getBigDecimal(5)))
+                .list();
+        var contractIds = new HashSet<UUID>();
+        BigDecimal originalPrincipal = BigDecimal.ZERO;
+        BigDecimal scheduled = BigDecimal.ZERO;
+        BigDecimal paid = BigDecimal.ZERO;
+        BigDecimal remainingPresent = BigDecimal.ZERO;
+        for (var row : rows) {
+            if (contractIds.add(row.contractId())) {
+                originalPrincipal = originalPrincipal.add(row.principal());
+            }
+            scheduled = scheduled.add(row.scheduled());
+            paid = paid.add(row.paid());
+            remainingPresent = remainingPresent.add(remainingPresentValue(row.present(), row.scheduled(), money(row.scheduled().subtract(row.paid()))));
+        }
+        scheduled = money(scheduled);
+        paid = money(paid);
+        remainingPresent = money(remainingPresent);
+        BigDecimal outstanding = money(scheduled.subtract(paid));
+        return new PortfolioPosition(asOf, contractIds.size(), money(originalPrincipal), scheduled, paid, outstanding,
+                remainingPresent, remainingInterest(outstanding, remainingPresent));
     }
 
     private java.util.List<InstallmentBalance> balances(UUID contractId, LocalDate asOf) {
-        return jdbc.sql("select i.id,i.installment_number,i.due_date,i.future_value,coalesce(sum(a.amount) filter (where s.effective_date<=:asOf),0) from installment i left join settlement_allocation a on a.installment_id=i.id left join settlement s on s.id=a.settlement_id where i.contract_id=:contract group by i.id,i.installment_number,i.due_date,i.future_value order by i.due_date,i.installment_number")
+        return jdbc.sql("select i.id,i.installment_number,i.due_date,i.present_value,i.future_value,coalesce(sum(a.amount) filter (where s.effective_date<=:asOf),0) from installment i left join settlement_allocation a on a.installment_id=i.id left join settlement s on s.id=a.settlement_id where i.contract_id=:contract group by i.id,i.installment_number,i.due_date,i.present_value,i.future_value order by i.due_date,i.installment_number")
                 .param("asOf", asOf).param("contract", contractId).query((row, ignored) ->
-                        new InstallmentBalance(row.getObject(1, UUID.class), row.getInt(2), row.getObject(3, LocalDate.class), row.getBigDecimal(4), row.getBigDecimal(5))).list();
+                        new InstallmentBalance(row.getObject(1, UUID.class), row.getInt(2), row.getObject(3, LocalDate.class),
+                                row.getBigDecimal(4), row.getBigDecimal(5), row.getBigDecimal(6))).list();
     }
 
     private BigDecimal totalOutstanding(UUID contractId) {
@@ -135,6 +175,12 @@ public class ServicingService {
     private BigDecimal sumOutstanding(java.util.List<InstallmentBalance> balances) {
         BigDecimal result = BigDecimal.ZERO;
         for (var balance : balances) result = result.add(balance.outstanding());
+        return money(result);
+    }
+
+    private BigDecimal sumRemainingPresent(java.util.List<InstallmentBalance> balances) {
+        BigDecimal result = BigDecimal.ZERO;
+        for (var balance : balances) result = result.add(balance.remainingPresent());
         return money(result);
     }
 
